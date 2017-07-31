@@ -4,6 +4,7 @@ import time
 import datetime
 import HttpHelper
 import OracleHelper
+from log import Log
 
 
 # 读数据库数据

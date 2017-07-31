@@ -4,6 +4,7 @@ import time
 import datetime
 import HttpHelper
 import OracleHelper
+from log import Log
 
 
 # 读数据库数据
@@ -84,6 +85,8 @@ def SetData():
         ret = Http.Get(params)
         print(ret)
         print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' | ' + temp[2] + " | " + ret[8:10])
+
+        Log.Write(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' | ' + temp[2] + " | " + ret[8:10])
         # return
         # return
         time.sleep(1)
