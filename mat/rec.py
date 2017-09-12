@@ -9,7 +9,7 @@ from log import Log
 
 # 读数据库数据
 def GetData():
-    orcale = OracleHelper.Oracle('dsjky/quickhigh@192.168.2.105:1521/DSJKY_P')
+    orcale = OracleHelper.Oracle('*')
 
     try:
         # 先取出来所有的单据  TODO：添加时间过滤
@@ -78,6 +78,8 @@ def SetData(order_data):
         http = HttpHelper.Http()
         for data in order_data:
             # print(data)
+            # continue
+            # print(data[24] if data[24] else 0)
             # return
             params = {
                 "data": {
@@ -112,8 +114,8 @@ def SetData(order_data):
                             "rectransTolocation": data[14], # 接收仓库编号
                             "rectransAssetnum":'', # 资产编号
                             "rectransTolot":str(data[8])[12:20], # 批次
-                            "rectransMaxnum":data[24], # 物资在本库最大储备量
-                            "rectransMinnum":data[25], # 物资在本库最小储备量
+                            "rectransMaxnum":data[24] if data[24] else 0, # 物资在本库最大储备量
+                            "rectransMinnum":data[25] if data[24] else 0, # 物资在本库最小储备量
                             "rectransQualitydate": '',# 质保期（天
                             "overhaulPeriod": '', # 超大修期（天）
                             'rectransLifeperiod':'' # 寿命期（天）
@@ -125,9 +127,9 @@ def SetData(order_data):
             }
             print(params)
             # return
-            # ret = http.Get(params)
-            # print(ret)
-            # print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' | ' + temp[2] + " | " + ret[8:10])
+            ret = http.Get(params)
+            print(ret)
+            print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' | ' + data[2] + " | " + ret[8:10])
     except BaseException as e:
         Log.error(e)
 
