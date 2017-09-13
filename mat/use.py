@@ -9,91 +9,131 @@ from log import Log
 
 # 读数据库数据
 def GetData():
-    pass
+    '''
+    从数据库获取用料数据，用料数据-退料数据=接口用料数据
+    :return:
+    '''
+    orcale = OracleHelper.Oracle('***')
+    sql = "select *  from TB_FDN_MATERIALS_USE WHERE YHDW_CODE='DEPT000073' and TIME>to_date('2017-07-20','yyyy-MM-dd') order by TIME"
+    use_data = orcale.ExecuteData(sql)
+    print(len(use_data))
+    for use in use_data:
+        # print(use[6])
+        # 获取备品用料详情
+        detail_sql = '''
+                select * from (
+                select max(ID)new_id,MATERIALS_ID,PC,sum(COUNT)COunt from (
+                select TB_FDN_MATERIALS_DETAIL.*,SUBSTR(Materials_Code,13,8)PC from TB_FDN_MATERIALS_DETAIL
+                where PARENT_CODE='{0}' and Materials_Type_Code='64002' and Materials_Code  not in (
+                select Materials_Code from TB_FDN_MATERIALS_DETAIL where PARENT_CODE=
+                (select CODE from TB_FDN_MATERIALS_RETURN where P_ID='{0}'))) group by PC,MATERIALS_ID) A
+                left join TB_FDN_MATERIALS_CARD on TB_FDN_MATERIALS_CARD.ID=A.MATERIALS_ID
+                '''.format(use[6])
+        bp_use_detail_data = orcale.ExecuteData(detail_sql)
+        if len(bp_use_detail_data) > 0:
+            for bp in bp_use_detail_data:
+                # def SetParams(id, num, name, loca, model, count, price, duan, date, peo, zhichu, pc)
+                param = SetParams(bp_use_detail_data[0],
+                                  bp[6],
+                                  bp[5],
+                                  use[4],  # ck
+                                  bp[8],
+                                  bp[3],
+                                  bp[10],
+                                  use[14],  # duan
+                                  use[1],  # date
+                                  use[2],  # peo
+                                  use[13],  # zhichu
+                                  bp[2])
+                print(param)
+                SetData(param,use[6])
+
+        # 获取消耗品用料详情
+        detail_sql = '''select *from(
+select MATERIALS_ID,ID as NEW_ID,(NVL(A.COUNT,0)-NVL(B.T_COUNT,0))NEW_COUNT,A.MATERIALS_CODE from (
+select TB_FDN_MATERIALS_DETAIL.*,SUBSTR(Materials_Code,13,8)PC from TB_FDN_MATERIALS_DETAIL
+where PARENT_CODE='{0}' and Materials_Type_Code='64001')A
+left join
+(select MATERIALS_CODE,sum(count)T_COUNT from TB_FDN_MATERIALS_DETAIL where PARENT_CODE in
+(select CODE from TB_FDN_MATERIALS_RETURN where P_ID='{0}') and Materials_Type_Code='64001'
+group by MATERIALS_CODE
+)B on B.MATERIALS_CODE=A.MATERIALS_CODE)C
+left join TB_FDN_MATERIALS_CARD on TB_FDN_MATERIALS_CARD.ID=C.MATERIALS_ID
+        '''.format(use[6])
+        print(detail_sql)
+        xh_use_detail_data = orcale.ExecuteData(detail_sql)
+        if len(xh_use_detail_data) > 0 :
+            for xh in xh_use_detail_data:
+                # def SetParams(id, num, name, loca, model, count, price, duan, date, peo, zhichu, pc)
+                param = SetParams(xh[1],
+                                  xh[6],
+                                  xh[5],
+                                  use[4],  # ck
+                                  xh[8],
+                                  xh[2],
+                                  xh[10],
+                                  use[14],  # duan
+                                  use[1],  # date
+                                  use[2],  # peo
+                                  use[13],  # zhichu
+                                  xh[3][12:20])
+                print(param)
+                SetData(param,use[6])
+
+def SetParams(id, num, name, loca, model, count, price, duan, date, peo, zhichu, pc):
+    params = {
+        "data": {
+            "data": [
+                {
+                    "usetransId": id,  # 主键
+                    "usetransStocknum": num,  # 物资编号
+                    "usetransStockname": name,  # 物资名称
+                    # "usetransWonum": '123',  # 工单号
+                    "usetransLocation": loca,  # 位置
+                    "usetransModel": model,  # 规格型号
+                    "usetransType": 'ISSUE',  # 使用类型（发放ISSUE/退回RETURN）
+                    "usetransQuality": '-' + str(count),  # 数量
+                    "usetransPrice": price,  # 单价
+                    # "usetransDevicenum": '123',  # 设备
+                    # "usetransWorkarea": '123',  # 工区
+                    # "usetransWorkshop": '123',  # 车间
+                    "usetransStation": duan,  # 段
+                    "usetransStockstate": '1',  # 条件代码（1良好、2在修、3报废等等）
+                    "usetransDate": date.strftime('%Y-%m-%d'),  # 使用日期yyy-MM-dd hh:mm:ss
+                    "usetransPerson": peo,  # 使用人
+                    "businessCategory": 'keyun',  # 业务分类（例：chewu车务、jiwu机务、gongwu工务等等）
+                    # "usetransStoreloc": temp[10],  # 仓库名称
+                    # "usetransCurbal": '123',  # 库存数量
+                    "usetransLocationdesc": zhichu,  # 位置描述
+                    # "usetransReason": '123',  # 上下线原因
+                    "batchNo": pc  # 批次号
+                }
+            ],
+            "method": "saveMatusetrans",
+            "type": "keyun"
+        }
+    }
+    return params
+
 
 # 写接口数据
-def SetData():
-    orcale = OracleHelper.Oracle('dsjky/quickhigh@192.168.2.105:1521/DSJKY_P')
-    sql = '''SELECT TB_FDN_MATERIALS_DETAIL.ID,
-      TB_FDN_MATERIALS_DETAIL.PARENT_CODE,
-      TB_FDN_MATERIALS_CARD.WZBM,
-      TB_FDN_MATERIALS_DETAIL.INSERT_TIME,
-      fun_GetMatCount(TB_FDN_MATERIALS_CARD.WZBM,TB_FDN_MATERIALS_DETAIL.PARENT_CODE) COUNT,
-      TB_FDN_MATERIALS_CARD.HSDJ,
-      fun_GetAimDept(TB_FDN_MATERIALS_USE.YHDW_CODE,'10802')duan_code,
-      TB_FDN_MATERIALS_CARD.WZM,
-      TB_FDN_MATERIALS_CARD.WZLB_CODE,
-      TB_FDN_MATERIALS_CARD.GGXH,
-      TB_FDN_MATERIALS_WAREHOUSE.CODE,
-      TB_FDN_MATERIALS_DETAIL.MATERIALS_CODE,
-      TB_FDN_MATERIALS_USE.SUBJECT_DEP_NAME,
-      TB_FDN_MATERIALS_SUBJECT.TRAIN_CODE
-    FROM TB_FDN_MATERIALS_DETAIL
-    LEFT JOIN TB_FDN_MATERIALS_USE
-    ON TB_FDN_MATERIALS_USE.CODE=TB_FDN_MATERIALS_DETAIL.PARENT_CODE
-    LEFT JOIN TB_FDN_MATERIALS_CARD
-    ON TB_FDN_MATERIALS_CARD.ID=TB_FDN_MATERIALS_DETAIL.MATERIALS_ID
-    LEFT JOIN TB_FDN_MATERIALS_WAREHOUSE
-    ON TB_FDN_MATERIALS_WAREHOUSE.ID          =TB_FDN_MATERIALS_DETAIL.CK_CODE
-    LEFT JOIN TB_FDN_MATERIALS_SUBJECT
-    ON Tb_Fdn_Materials_Subject.Code=TB_FDN_MATERIALS_USE.SUBJECT_CODE
-    WHERE TB_FDN_MATERIALS_DETAIL.OP_TYPE_CODE='65002'
-    '''
-
-    # print(sql)
-
-    ret = orcale.ExecuteData(sql)
+def SetData(data, order):
     # print(ret)
     # return
-    for temp in ret:
-        # print(temp[18].strftime('%Y-%m-%d'))
-        # print(datetime.datetime.strptime(temp[18],'%Y-%m-%d'))
-        # return
-        Http = HttpHelper.Http()
-        params = {
-            "data": {
-                "data": [
-                    {
-                        "usetransId": temp[0],  # 主键
-                        "usetransStocknum": temp[2],  # 物资编号
-                        "usetransStockname": temp[7],  # 物资名称
-                        # "usetransWonum": '123',  # 工单号
-                        "usetransLocation": temp[10],  # 位置
-                        "usetransModel": temp[9],  # 规格型号
-                        "usetransType": 'ISSUE',  # 使用类型（发放ISSUE/退回RETURN）
-                        "usetransQuality": '-'+temp[4],  # 数量
-                        "usetransPrice": temp[5],  # 单价
-                        # "usetransDevicenum": '123',  # 设备
-                        # "usetransWorkarea": '123',  # 工区
-                        # "usetransWorkshop": '123',  # 车间
-                        "usetransStation": temp[6],  # 段
-                        "usetransStockstate": '1',  # 条件代码（1良好、2在修、3报废等等）
-                        "usetransDate": temp[3].strftime('%Y-%m-%d'),  # 使用日期yyy-MM-dd hh:mm:ss
-                        "usetransPerson": temp[12],  # 使用人
-                        "businessCategory": 'keyun',  # 业务分类（例：chewu车务、jiwu机务、gongwu工务等等）
-                        # "usetransStoreloc": temp[10],  # 仓库名称
-                        # "usetransCurbal": '123',  # 库存数量
-                        "usetransLocationdesc": temp[13],  # 位置描述
-                        # "usetransReason": '123',  # 上下线原因
-                        "batchNo": '001'  # 批次号 TODO:需要修改
-                    }
-                ],
-                "method": "saveMatusetrans",
-                "type": "keyun"
-            }
-        }
-        ret = Http.Get(params)
-        print(ret)
-        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' | ' + temp[2] + " | " + ret[8:10])
+    http = HttpHelper.Http()
+    ret = http.Get(data)
+    print(ret)
+    print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' | ' + order + " | " + ret[8:10])
 
-        Log.Write(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' | ' + temp[2] + " | " + ret[8:10])
-        # return
-        # return
-        time.sleep(1)
+    Log.Write(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' | ' + order + " | " + ret[8:10])
+    # return
+    # return
+    # time.sleep(1)
+
 
 # 启动item接口
 def Start():
-    SetData()
+    GetData()
 
 
 if __name__ == "__main__":
